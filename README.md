@@ -6,6 +6,10 @@
 이 저장소는 **Django REST Framework (DRF)** 기반으로 구축되었으며,  
 React 프론트엔드(`hi-my-day-web`)과 REST API로 연동됩니다.
 
+
+![readme-1](public/readme-1.png)
+![readme-2](public/readme-2.png)
+![readme-3](public/readme-3.png)
 ---
 
 ## 🧩 Overview
