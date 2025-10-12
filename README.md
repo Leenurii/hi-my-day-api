@@ -35,6 +35,7 @@ React 프론트엔드(`hi-my-day-web`)과 REST API로 연동됩니다.
 
 ## 🧭 Project Structure
 
+```
 hi-my-day-api/
 ├── manage.py
 ├── config/
@@ -63,7 +64,7 @@ hi-my-day-api/
 ├── .env.example
 ├── requirements.txt
 └── README.md
-
+```
 
 ---
 
@@ -115,7 +116,7 @@ http://localhost:8000/api/schema/swagger-ui/
 
 
 ---
-
+```
 [React Web App]
       ↓ (REST API)
 [NGINX / CORS Gateway]
@@ -131,3 +132,4 @@ http://localhost:8000/api/schema/swagger-ui/
 [Optional]
   ├── OpenAI or Claude (AI 교정)
   └── S3 / Cloud Storage
+```
