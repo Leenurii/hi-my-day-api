@@ -2,6 +2,7 @@
 from datetime import date
 from django.db.models.functions import TruncDate
 from django.db.models import Min
+from django.contrib.auth import get_user_model
 from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -10,8 +11,7 @@ from django.conf import settings
 
 from .models import Entry
 from .serializers import EntryCreateSerializer, EntryDetailSerializer, EntryListSerializer
-from .services import analyze_entry
-
+from .services import analyze_with_openai
 # 개발용 더미: "YYYY-MM-DD": entryId
 DUMMY_CALENDAR = {
     "2025-10-01": 101,
@@ -22,19 +22,55 @@ DUMMY_CALENDAR = {
     "2025-10-13": 106,
 }
 
+
+def _get_dev_user():
+    """DEBUG일 때 쓰는 가짜 유저를 확보."""
+    User = get_user_model()
+    # username/email은 원하는 값으로 바꿔도 됩니다.
+    user, _ = User.objects.get_or_create(
+        username="dev",
+        defaults={"email": "dev@example.com"}
+    )
+    return user
+
 class EntryViewSet(viewsets.ModelViewSet):
     queryset = Entry.objects.all()
     permission_classes = [IsAuthenticated]
 
+    def get_permissions(self):
+        # DEV에서는 권한 해제
+        if settings.DEBUG:
+            return [AllowAny()]
+        return super().get_permissions()
+    
+    def get_authenticators(self):
+        # DEV에서는 인증 자체 비활성화 → CSRF도 우회
+        if settings.DEBUG:
+            return []
+        return super().get_authenticators()
+
     def get_queryset(self):
-        return Entry.objects.filter(user=self.request.user).order_by("-date", "-id")
+        # 사용자별 필터링: DEV면 dev유저, 운영이면 실제 로그인 유저
+        if settings.DEBUG:
+            user = _get_dev_user()
+        else:
+            user = self.request.user
+        return Entry.objects.filter(user=user).order_by("-date", "-id")
 
     def get_serializer_class(self):
-        if self.action in ["create"]:
+        if self.action == "create":
             return EntryCreateSerializer
-        if self.action in ["list"]:
+        if self.action == "list":
             return EntryListSerializer
         return EntryDetailSerializer
+    
+    def perform_create(self, serializer):
+        # 저장 시에도 동일하게 유저 주입
+        if settings.DEBUG:
+            user = _get_dev_user()
+        else:
+            user = self.request.user
+        serializer.save(user=user)
 
     def list(self, request, *args, **kwargs):
         """
@@ -108,10 +144,17 @@ class EntryViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["POST"])
     def analyze(self, request, pk=None):
         entry = self.get_object()
-        result = analyze_entry(entry)
-        entry.analysis = result
+
+        data = analyze_with_openai(
+            original_lang=entry.original_lang,
+            original_text=entry.original_text,
+            title=entry.title,
+            meta=entry.meta or {},
+        )
+        entry.analysis = data
         entry.save(update_fields=["analysis", "updated_at"])
-        return Response({"status": "ok", "analysis": result})
+
+        return Response({"status": "ok", "analysis": data})
     
 @api_view(["GET"])
 @permission_classes([AllowAny])   # 공개(단, 아래에서 DEBUG 체크)

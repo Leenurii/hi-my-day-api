@@ -9,13 +9,17 @@ class EntryCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         text = attrs.get("original_text", "") or ""
-        if len(text.strip().split()) < 3:
-            raise serializers.ValidationError({"original_text": "내용이 너무 짧아요."})
+        words = text.strip().split()
+
+        if len(text.strip()) < 30 or len(words) < 3:
+            raise serializers.ValidationError({
+                "사유": "최소 30자 이상, 3단어 이상 입력해주세요."
+        })
         return attrs
 
     def create(self, validated_data):
         user = self.context["request"].user
-        return Entry.objects.create(user=user, **validated_data)
+        return Entry.objects.create(**validated_data)
 
 class EntryDetailSerializer(serializers.ModelSerializer):
     class Meta:
