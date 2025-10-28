@@ -1,60 +1,47 @@
 # entries/views.py
 from datetime import date
-from django.db.models.functions import TruncDate
-from django.db.models import Min
 from django.contrib.auth import get_user_model
-from rest_framework import viewsets, mixins, status
+from django.conf import settings
+from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from django.conf import settings
-
+import calendar as py_calendar 
 from .models import Entry
 from .serializers import EntryCreateSerializer, EntryDetailSerializer, EntryListSerializer
 from .services import analyze_with_openai
-# 개발용 더미: "YYYY-MM-DD": entryId
-DUMMY_CALENDAR = {
-    "2025-10-01": 101,
-    "2025-10-03": 102,
-    "2025-10-07": 103,
-    "2025-10-11": 104,
-    "2025-10-12": 105,
-    "2025-10-13": 106,
-}
+import json
+import random
+from pathlib import Path
 
 
 def _get_dev_user():
-    """DEBUG일 때 쓰는 가짜 유저를 확보."""
+    """DEBUG일 때 쓰는 가짜 유저 (DB에 dev 계정 자동 생성)"""
     User = get_user_model()
-    # username/email은 원하는 값으로 바꿔도 됩니다.
     user, _ = User.objects.get_or_create(
         username="dev",
         defaults={"email": "dev@example.com"}
     )
     return user
 
+
 class EntryViewSet(viewsets.ModelViewSet):
     queryset = Entry.objects.all()
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        # DEV에서는 권한 해제
         if settings.DEBUG:
             return [AllowAny()]
         return super().get_permissions()
-    
+
     def get_authenticators(self):
-        # DEV에서는 인증 자체 비활성화 → CSRF도 우회
         if settings.DEBUG:
-            return []
+            return []  # 인증 비활성화 (개발모드)
         return super().get_authenticators()
 
     def get_queryset(self):
-        # 사용자별 필터링: DEV면 dev유저, 운영이면 실제 로그인 유저
-        if settings.DEBUG:
-            user = _get_dev_user()
-        else:
-            user = self.request.user
+        """DEBUG 모드에서는 dev 유저, 아니면 실제 로그인 유저"""
+        user = _get_dev_user() if settings.DEBUG else self.request.user
         return Entry.objects.filter(user=user).order_by("-date", "-id")
 
     def get_serializer_class(self):
@@ -63,41 +50,44 @@ class EntryViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             return EntryListSerializer
         return EntryDetailSerializer
-    
+
     def perform_create(self, serializer):
-        # 저장 시에도 동일하게 유저 주입
-        if settings.DEBUG:
-            user = _get_dev_user()
-        else:
-            user = self.request.user
+        user = _get_dev_user() if settings.DEBUG else self.request.user
         serializer.save(user=user)
 
     def list(self, request, *args, **kwargs):
-        """
-        - 기본: 사용자의 엔트리 리스트
-        - 캘린더 맵: ?calendar=1&month=YYYY-MM
-          → { "YYYY-MM-DD": entryId, ... }
-        - 개발 더미 사용: &dev_dummy=1 (settings.DEBUG=True 일 때만 동작)
-        """
-        calendar = request.query_params.get("calendar")
-        month = request.query_params.get("month")  # YYYY-MM
-        if calendar and month:
-            qs = self.get_queryset().filter(date__startswith=month)
+        calendar_mode = request.query_params.get("calendar")
+        month_param = request.query_params.get("month")  # "YYYY-MM"
+
+        if calendar_mode and month_param:
+            # month_param 예: "2025-10"
+            try:
+                year_str, month_str = month_param.split("-")
+                year_i = int(year_str)
+                month_i = int(month_str)
+
+                # 그 달의 첫째날 / 마지막날 계산
+                # monthrange -> (weekday_of_first, number_of_days)
+                _weekday, last_day = py_calendar.monthrange(year_i, month_i)
+
+                start_date = date(year_i, month_i, 1)
+                end_date = date(year_i, month_i, last_day)
+
+            except Exception:
+                return Response(
+                    {"detail": "month must be YYYY-MM"},
+                    status=400,
+                )
+
+            qs = self.get_queryset().filter(date__gte=start_date, date__lte=end_date)
             mapping = {e.date.strftime("%Y-%m-%d"): e.id for e in qs}
-
-            # 개발 편의: 더미 합치기 (실서버 X)
-            if settings.DEBUG and request.query_params.get("dev_dummy") == "1":
-                mapping = {**DUMMY_CALENDAR, **mapping}  # 실제 데이터가 우선되도록 순서 조정 가능
-
             return Response(mapping)
+
         return super().list(request, *args, **kwargs)
 
     @action(detail=False, methods=["GET"], url_path="by-date")
     def by_date(self, request):
-        """
-        ?date=YYYY-MM-DD → 해당 날짜 엔트리 1개 반환(있으면)
-        없으면 404 대신 {"exists": False} 형태로 응답할 수도 있음.
-        """
+        """?date=YYYY-MM-DD → 해당 날짜 엔트리 1개 반환"""
         key = request.query_params.get("date")
         if not key:
             return Response({"detail": "date query param required (YYYY-MM-DD)"}, status=400)
@@ -112,10 +102,8 @@ class EntryViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["POST"], url_path="upsert-by-date")
     def upsert_by_date(self, request):
         """
-        바디: { date, title, original_lang, original_text, meta? }
-        - 해당 date에 사용자의 엔트리가 있으면 업데이트
-        - 없으면 생성
-        → 프론트에서 '특정 날짜 칸 눌러서 작성/수정' UX에 유용
+        { date, title, original_lang, original_text, meta? }
+        → 해당 날짜 엔트리 있으면 수정, 없으면 생성
         """
         data = request.data or {}
         key = data.get("date")
@@ -155,32 +143,42 @@ class EntryViewSet(viewsets.ModelViewSet):
         entry.save(update_fields=["analysis", "updated_at"])
 
         return Response({"status": "ok", "analysis": data})
-    
+
+
 @api_view(["GET"])
-@permission_classes([AllowAny])   # 공개(단, 아래에서 DEBUG 체크)
-def dev_calendar(request):
-    """
-    개발 전용: DEBUG=True일 때만 더미 캘린더를 리턴.
-    사용: GET /api/dev-calendar/?month=2025-10
-    """
-    if not settings.DEBUG:
-        return Response({"detail": "Not available"}, status=404)
-
-    month = request.query_params.get("month")
-    if not month:
-        return Response({"detail": "month query param required (YYYY-MM)"}, status=400)
-
-    # DUMMY_CALENDAR는 파일 상단이나 서비스 파일에 정의해 두세요.
-    mapping = {k: v for k, v in DUMMY_CALENDAR.items() if k.startswith(f"{month}-")}
-    return Response(mapping)
-
-# 오늘의 문장 3개 (프론트 QuoteCarousel 용)
-@api_view(["GET"])
-@permission_classes([AllowAny])  # 로그인 없이도 가능하게 할지 선택
+@permission_classes([AllowAny])
 def quotes(request):
-    data = [
-        {"en": "Consistency beats perfection.", "ko": "꾸준함은 완벽함을 이깁니다."},
-        {"en": "Small steps make big changes.", "ko": "작은 걸음이 큰 변화를 만듭니다."},
-        {"en": "Learn something new every day.", "ko": "매일 새로운 것을 배우세요."},
-    ]
-    return Response(data)
+    """
+    오늘의 한 줄 학습용 문장 3개를 반환.
+    en: 영어 표현 (일기에서 바로 쓸 수 있는 톤)
+    ko: 한국어 뉘앙스/뜻
+    """
+    # quotes_data.json 위치 잡기
+    # entries/quotes_data.json 기준
+    quotes_path = Path(__file__).resolve().parent / "quotes_data.json"
+
+    try:
+        with open(quotes_path, "r", encoding="utf-8") as f:
+            all_quotes = json.load(f)
+    except Exception:
+        # 만약 파일이 없거나 깨졌어도 API는 죽지 않게 기본 fallback
+        all_quotes = [
+            {
+                "en": "I'm trying to focus on progress, not perfection.",
+                "ko": "완벽보다 조금씩 나아지는 것에 집중하려고 해요."
+            },
+            {
+                "en": "Today felt overwhelming, but I made it through.",
+                "ko": "오늘은 버거웠지만 그래도 버텼어요."
+            },
+            {
+                "en": "I’m slowly getting comfortable with being myself.",
+                "ko": "조금씩 있는 그대로의 나를 편하게 느끼는 중이에요."
+            }
+        ]
+
+    # 최소 3개만 주면 되니까, 3개 뽑기
+    # all_quotes가 3개 미만이라도 안전하게 처리
+    picked = random.sample(all_quotes, k=min(3, len(all_quotes)))
+
+    return Response(picked)
