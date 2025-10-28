@@ -5,7 +5,6 @@ db.sqlite3
 
 # Env
 .env
-certs/*.pem
-
+certs/
 .venv/
 
