@@ -7,9 +7,8 @@ from django.views.generic import TemplateView
 urlpatterns = [
     path("admin/", admin.site.urls),
 
-    # ✅ entries 라우트 연결
     path("api/", include("entries.urls")),
-
+    path("api/accounts/", include("accounts.urls")),
     path("terms/", TemplateView.as_view(template_name="terms.html"), name="terms"),
 
 ]

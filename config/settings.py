@@ -30,13 +30,17 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
+    "192.168.45.193",
     "hi-my-day.mingsayz.com",
+    "hi-my-day.apps.tossmini.com",
+    "hi-my-day.private-apps.tossmini.com"
 ]
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    "corsheaders",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -45,12 +49,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "rest_framework",
     "drf_spectacular",
-    "corsheaders",
     "accounts",
     "entries",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -58,7 +62,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
 ]
 
 REST_FRAMEWORK = {
@@ -128,7 +131,15 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.45.193",
+    "http://192.168.45.193:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/

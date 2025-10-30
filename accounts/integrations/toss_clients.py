@@ -25,7 +25,7 @@ class TossMTLS:
             GEN_TOKEN_URL,
             headers={"Content-Type": "application/json"},
             data=json.dumps(payload),
-            cert=self.cert, verify=self.verify, timeout=DEFAULT_TIMEOUT,
+            cert=self.cert, timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -36,7 +36,7 @@ class TossMTLS:
             REFRESH_URL,
             headers={"Content-Type": "application/json"},
             data=json.dumps(payload),
-            cert=self.cert, verify=self.verify, timeout=DEFAULT_TIMEOUT,
+            cert=self.cert, timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
@@ -45,7 +45,7 @@ class TossMTLS:
         resp = requests.get(
             LOGIN_ME_URL,
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {access_token}"},
-            cert=self.cert, verify=self.verify, timeout=DEFAULT_TIMEOUT,
+            cert=self.cert, timeout=DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         return resp.json()
