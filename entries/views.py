@@ -13,6 +13,9 @@ from .services import analyze_with_openai
 import json
 import random
 from pathlib import Path
+from rest_framework.exceptions import AuthenticationFailed
+from accounts.models import AppUser  # AUTH_USER_MODEL 이 이거라면
+
 
 
 def _get_dev_user():
@@ -52,7 +55,20 @@ class EntryViewSet(viewsets.ModelViewSet):
         return EntryDetailSerializer
 
     def perform_create(self, serializer):
-        user = _get_dev_user() if settings.DEBUG else self.request.user
+        if settings.DEBUG:
+            user = _get_dev_user()
+        else:
+            user = self.request.user
+            # 1) 인증 안 된 경우
+            if not user or not user.is_authenticated:
+                raise AuthenticationFailed("로그인이 필요합니다.")
+
+            # 2) 혹시 Django User로 들어온 경우 AUTH_USER_MODEL로 변환
+            # settings.AUTH_USER_MODEL 이 "accounts.AppUser" 라고 가정
+            if user.__class__.__name__ != settings.AUTH_USER_MODEL.split(".")[-1]:
+                # 예: 토스 JWT 안 탔거나, 다른 인증으로 들어온 경우
+                raise AuthenticationFailed("올바른 사용자로 인증되지 않았습니다.")
+
         serializer.save(user=user)
 
     def list(self, request, *args, **kwargs):
