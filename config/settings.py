@@ -130,19 +130,10 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-CORS_ALLOW_ALL_ORIGINS= True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://192.168.45.193",
-    "http://192.168.45.193:5173",
-    "https://hi-my-day.mingsayz.com",
-    "http://hi-my-day.mingsayz.com",
-    "https://hi-my-day.private-apps.tossmini.com",
-    "https://hi-my-day.apps.tossmini.com",
-]
+CORS_ALLOW_ALL_ORIGINS= False
+CORS_ALLOWED_ORIGINS = []
 
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
 
