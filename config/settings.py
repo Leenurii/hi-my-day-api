@@ -158,3 +158,68 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# logs 디렉터리 자동 생성
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} :: {message}",
+            "style": "{",
+        },
+    },
+
+    "handlers": {
+        # 콘솔에도 동시에 출력
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+            "level": "DEBUG",
+        },
+        # 일반 로그 (app.log)
+        "file_app": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "app.log"),
+            "maxBytes": 5 * 1024 * 1024,  # 5MB 넘으면 회전
+            "backupCount": 3,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+            "level": "INFO",
+        },
+        # 에러 로그만 따로 (errors.log)
+        "file_errors": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "errors.log"),
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+            "level": "ERROR",
+        },
+    },
+
+    "loggers": {
+        # 기본 로거 — views, serializers 등 모든 곳에 적용
+        "": {
+            "handlers": ["console", "file_app"],
+            "level": "INFO",
+        },
+        # 장고 요청/응답 에러 (500 등)
+        "django.request": {
+            "handlers": ["console", "file_errors"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # DB 쿼리 로그 보고 싶으면 활성화
+        # "django.db.backends": {
+        #     "handlers": ["console", "file_app"],
+        #     "level": "DEBUG",
+        #     "propagate": False,
+        # },
+    },
+}

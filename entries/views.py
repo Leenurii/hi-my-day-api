@@ -16,6 +16,8 @@ from pathlib import Path
 from rest_framework.exceptions import AuthenticationFailed
 from accounts.models import AppUser  # AUTH_USER_MODEL 이 이거라면
 
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _get_dev_user():
@@ -91,6 +93,40 @@ class EntryViewSet(viewsets.ModelViewSet):
 
         return super().list(request, *args, **kwargs)
 
+    def create(self, request, *args, **kwargs):
+        logger.info("[Entry.create] called")
+        logger.debug("[Entry.create] raw data=%s", request.data)
+
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logger.warning("[Entry.create] serializer.errors=%s", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                self.perform_create(serializer)
+        except IntegrityError as e:
+            # 예: unique_together (user, date) 충돌
+            logger.error("[Entry.create] IntegrityError: %s", str(e), exc_info=True)
+            return Response(
+                {"detail": "이미 해당 날짜의 일기가 존재합니다."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except AuthenticationFailed as e:
+            # 혹시 윗단에서 잡히지 않을 경우 대비
+            logger.warning("[Entry.create] AuthenticationFailed: %s", str(e))
+            return Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            logger.error("[Entry.create] Unexpected error: %s", str(e), exc_info=True)
+            return Response(
+                {"detail": "Internal Server Error"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        headers = self.get_success_headers(serializer.data)
+        logger.info("[Entry.create] success id=%s", serializer.instance.id if serializer.instance else None)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    
     @action(detail=False, methods=["GET"], url_path="by-date")
     def by_date(self, request):
         """?date=YYYY-MM-DD → 해당 날짜 엔트리 1개 반환"""
