@@ -5,8 +5,12 @@ from datetime import date as date_func
 
 class Entry(models.Model):
     LANG_CHOICES = (("en", "English"), ("ko", "Korean"))
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entries")
+    user = models.ForeignKey(
+        "accounts.AppUser",  # 문자열 경로로 안전하게 참조
+        on_delete=models.CASCADE,
+        related_name="entries",
+        db_index=True,
+    )
     date = models.DateField(default=date_func.today)  # KST 기준(SETTINGS: USE_TZ=False 가정)
     title = models.CharField(max_length=200)
     original_lang = models.CharField(max_length=2, choices=LANG_CHOICES)
