@@ -15,6 +15,7 @@ import random
 from pathlib import Path
 from rest_framework.exceptions import AuthenticationFailed
 from accounts.models import AppUser  # AUTH_USER_MODEL 이 이거라면
+from django.db import IntegrityError, transaction
 
 import logging
 logger = logging.getLogger(__name__)
