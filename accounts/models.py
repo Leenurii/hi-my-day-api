@@ -4,6 +4,17 @@ class AppUser(models.Model):
     toss_user_key = models.BigIntegerField(unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    @property
+    def is_active(self) -> bool:
+        return True
 class TossOAuthToken(models.Model):
     toss_user_key = models.BigIntegerField(db_index=True)
     refresh_token = models.TextField()
